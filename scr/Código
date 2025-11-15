@@ -1,1 +1,177 @@
-#enviou da maneira errada o codigo
+import cv2
+import numpy as np
+import matplotlib.pyplot as plt
+import os
+import time
+from skimage.feature import graycomatrix, graycoprops
+from skimage.measure import shannon_entropy
+import json
+
+def cor_predominante(imagem):
+    """Detecta cor predominante (média RGB)"""
+    media = imagem.mean(axis=(0,1))
+    return tuple(int(v) for v in media)
+
+def carregar_imagem(caminho):
+    if not os.path.exists(caminho):
+        print("Erro: Caminho inválido.")
+        return None
+    img = cv2.imread(caminho)
+    if img is None:
+        print("Erro ao carregar imagem.")
+        return None
+    print(f"Imagem carregada com sucesso: {caminho}")
+    print(f"Dimensões: {img.shape[1]}x{img.shape[0]} px")
+    print("Cor predominante (RGB):", cor_predominante(img))
+    return img
+
+
+def converter_cinza(img):
+    return cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+def converter_hsv(img):
+    return cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+
+
+def equalizar_histograma(img):
+    """
+    Gera e exibe o histograma equalizado da imagem,
+    sem modificar a imagem original.
+    (Cumpre RF07 - equalização do histograma)
+    """
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    img_eq = cv2.equalizeHist(gray)
+
+    hist_eq = cv2.calcHist([img_eq], [0], None, [256], [0, 256])
+
+    plt.figure(figsize=(8, 4))
+    plt.plot(hist_eq, color='gray')
+    plt.title('Histograma Equalizado')
+    plt.xlabel('Níveis de Cinza')
+    plt.ylabel('Frequência')
+    plt.grid(True)
+    plt.show()
+
+    return hist_eq
+
+
+def binarizar_imagem(img, limiar=127):
+    gray = converter_cinza(img)
+    _, binaria = cv2.threshold(gray, limiar, 255, cv2.THRESH_BINARY)
+    return binaria
+
+
+def detectar_bordas(img):
+    gray = converter_cinza(img)
+    return cv2.Canny(gray, 100, 200)
+
+
+def propriedades_basicas(img):
+    gray = converter_cinza(img)
+    contours, _ = cv2.findContours(gray, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    areas = [cv2.contourArea(c) for c in contours]
+    return {"qtd_objetos": len(contours), "area_media": np.mean(areas) if areas else 0}
+
+
+def calcular_metricas_textura(img):
+    gray = converter_cinza(img)
+    entropia = shannon_entropy(gray)
+    variacao = np.var(gray)
+    glcm = graycomatrix(gray, [1], [0], 256, symmetric=True, normed=True)
+    homogeneidade = graycoprops(glcm, 'homogeneity')[0, 0]
+    return {"entropia": entropia, "variacao": variacao, "homogeneidade": homogeneidade}
+
+
+def classificar_complexidade(metricas):
+    if metricas["entropia"] > 5 or metricas["variacao"] > 5000:
+        return "Alta complexidade"
+    return "Baixa complexidade"
+
+
+
+def main():
+    print("=== SISTEMA DE ANÁLISE DE PADRÕES EM IMAGENS ===")
+    caminho = input("Digite o caminho da imagem (ex: /content/imagem.jpg): ")
+    img = carregar_imagem(caminho)
+    if img is None:
+        return
+
+    while True:
+        print("\n--- MENU ---")
+        print("1. Converter para escala de cinza")
+        print("2. Converter para HSV")
+        print("3. Equalizar histograma")
+        print("4. Binarizar imagem")
+        print("5. Detectar bordas")
+        print("6. Calcular métricas de textura")
+        print("7. Exibir mapa de textura")
+        print("8. Gerar relatório manual")
+        print("9. Detectar formas geométricas")
+        print("10. Detectar padrões repetitivos")
+        print("0. Sair")
+
+        time.sleep(1)
+        opcao = input("Escolha uma opção: ")
+
+        if opcao == "1":
+            plt.imshow(converter_cinza(img), cmap='gray')
+            plt.title("Imagem em Tons de Cinza")
+            plt.show()
+
+        elif opcao == "2":
+            hsv = converter_hsv(img)
+            plt.imshow(cv2.cvtColor(hsv, cv2.COLOR_HSV2RGB))
+            plt.title("Imagem em HSV")
+            plt.show()
+
+        elif opcao == "3":
+            eq = equalizar_histograma(img)
+            plt.imshow(eq, cmap='gray')
+            plt.title("Equalização de Histograma")
+            plt.show()
+
+        elif opcao == "4":
+            binaria = binarizar_imagem(img)
+            plt.imshow(binaria, cmap='gray')
+            plt.title("Imagem Binarizada")
+            plt.show()
+
+        elif opcao == "5":
+            bordas = detectar_bordas(img)
+            plt.imshow(bordas, cmap='gray')
+            plt.title("Detecção de Bordas")
+            plt.show()
+
+        elif opcao == "6":
+            metricas = calcular_metricas_textura(img)
+            complexidade = classificar_complexidade(metricas)
+            print(f"\nMétricas: {metricas}")
+            print(f"Complexidade: {complexidade}")
+
+        elif opcao == "7":
+            mapa_textura(img)
+
+        elif opcao == "8":
+            metricas = calcular_metricas_textura(img)
+            complexidade = classificar_complexidade(metricas)
+            gerar_relatorio(img, metricas, complexidade)
+
+        elif opcao == "9":
+            print("Detectando formas geométricas...")
+            detectar_formas_geometricas(img, json_path="/content/forms.json")
+
+        elif opcao == "10":
+            print("Detectando padrões repetitivos na imagem...")
+            detectar_padroes_textura(img)
+
+
+        elif opcao == "0":
+            print("Encerrando o programa...")
+            break
+
+        else:
+            print("Opção inválida. Tente novamente.")
+
+
+if __name__ == "__main__":
+    main()
