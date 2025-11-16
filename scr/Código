@@ -175,3 +175,238 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
+import cv2
+import numpy as np
+import matplotlib.pyplot as plt
+from skimage.feature import graycomatrix, graycoprops
+from skimage.measure import shannon_entropy
+import os
+
+def pedir_arq():
+    print("\n>> Arraste o arquivo para cá ou digite o caminho:")
+    entrada = input("Caminho: ")
+    arquivo = entrada.strip().strip('"').strip("'")
+    
+    if not os.path.exists(arquivo):
+        print(f" Erro: Arquivo não encontrado: {arquivo}")
+        return None
+    
+    return arquivo
+
+def mod_base():
+    print("\n--- 1. INSPEÇÃO DE TECIDO (FILTRO VISUAL) ---")
+    arquivo = pedir_arq()
+    if not arquivo: return
+
+    imagem = cv2.imread(arquivo, 0)
+    if imagem is None: print("Erro ao abrir imagem."); return
+
+    imagem = cv2.resize(imagem, (300, 300))
+    img_cor = cv2.cvtColor(imagem, cv2.COLOR_GRAY2BGR)
+
+    img_suave = cv2.medianBlur(imagem, 21)
+    _, mascara = cv2.threshold(img_suave, 80, 255, cv2.THRESH_BINARY_INV)
+    num_pxs = np.count_nonzero(mascara)
+
+    if num_pxs > 100:
+        situacao = "TECIDO DANIFICADO"
+        cor_tit = 'red'
+        contor, _ = cv2.findContours(mascara, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        cv2.drawContours(img_cor, contor, -1, (0, 0, 255), 2)
+    else:
+        situacao = "TECIDO INTEIRO"
+        cor_tit = 'green'
+
+    plt.figure(figsize=(12, 4))
+    
+    plt.subplot(1, 3, 1)
+    plt.imshow(cv2.cvtColor(img_cor, cv2.COLOR_BGR2RGB))
+    plt.title(situacao, color=cor_tit, fontweight='bold')
+    
+    plt.subplot(1, 3, 2)
+    plt.imshow(img_suave, cmap='gray')
+    plt.title("Visão do Robô\n(Xadrez Removido)")
+    
+    plt.subplot(1, 3, 3)
+    plt.imshow(mascara, cmap='gray')
+    plt.title(f"Máscara de Defeito\nPixels: {num_pxs}")
+    
+    plt.tight_layout()
+    plt.show()
+
+def mod_glcm():
+    print("\n--- 2. INSPEÇÃO DE TECIDO (GLCM AVANÇADO) ---")
+    arquivo = pedir_arq()
+    if not arquivo: return
+
+    imagem = cv2.imread(arquivo, 0)
+    if imagem is None: print("Erro ao abrir imagem."); return
+
+    imagem = cv2.resize(imagem, (300, 300))
+    img_cor = cv2.cvtColor(imagem, cv2.COLOR_GRAY2BGR)
+
+    img_borra = cv2.medianBlur(imagem, 21)
+    _, mascara = cv2.threshold(img_borra, 80, 255, cv2.THRESH_BINARY_INV)
+    contor, _ = cv2.findContours(mascara, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    
+    recorte = imagem[0:50, 0:50]
+    com_erro = False
+
+    if contor:
+        borda = max(contor, key=cv2.contourArea)
+        if cv2.contourArea(borda) > 100:
+            com_erro = True
+            pos_x, pos_y, larg, altu = cv2.boundingRect(borda)
+            larg, altu = max(larg, 40), max(altu, 40) 
+            recorte = imagem[pos_y:min(pos_y+altu, 299), pos_x:min(pos_x+larg, 299)]
+            
+            cv2.rectangle(img_cor, (pos_x, pos_y), (pos_x+larg, pos_y+altu), (0, 0, 255), 2)
+
+    if recorte.size > 0:
+        matriz = graycomatrix(recorte, [1], [0], 256, symmetric=True, normed=True)
+        energia = graycoprops(matriz, 'energy')[0, 0]
+        contraste = graycoprops(matriz, 'contrast')[0, 0]
+    else:
+        energia, contraste = 0, 0
+
+    res_txt = "DANIFICADO" if com_erro else "INTEIRO"
+    cor_txt = 'red' if com_erro else 'green'
+
+    plt.figure(figsize=(10, 5))
+    
+    plt.subplot(1, 2, 1)
+    plt.imshow(cv2.cvtColor(img_cor, cv2.COLOR_BGR2RGB))
+    plt.title(f"Diagnóstico: {res_txt}", color=cor_txt, fontweight='bold')
+    
+    plt.subplot(1, 2, 2)
+    plt.imshow(recorte, cmap='gray')
+    plt.title(f"Recorte Analisado (GLCM)\nEnergia: {energia:.4f} (Ordem)\nContraste: {contraste:.1f} (Rugosidade)")
+    
+    plt.tight_layout()
+    plt.show()
+
+def mod_tumor():
+    print("\n--- 3. DIAGNÓSTICO DE TUMOR (COM FILTRO DE CRÂNIO) ---")
+    arquivo = pedir_arq()
+    if not arquivo: return
+            
+    imagem = cv2.imread(arquivo, 0)
+    if imagem is None: print("Erro ao abrir imagem."); return
+
+    imagem = cv2.resize(imagem, (256, 256))
+    img_cor = cv2.cvtColor(imagem, cv2.COLOR_GRAY2BGR)
+
+    altu, larg = imagem.shape
+    dif_img = cv2.absdiff(imagem[:, :larg//2], cv2.flip(imagem[:, larg//2:], 1))
+
+    _, masc_cab = cv2.threshold(imagem, 10, 255, cv2.THRESH_BINARY)
+    masc_seg = cv2.erode(masc_cab[:, :larg//2], np.ones((15,15), np.uint8), iterations=2)
+    
+    dif_filt = cv2.bitwise_and(dif_img, dif_img, mask=masc_seg)
+
+    _, masc_blb = cv2.threshold(dif_filt, 50, 255, cv2.THRESH_BINARY)
+    grupos, _ = cv2.findContours(masc_blb, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    
+    con_int = 0.0
+    doente = False
+    
+    if grupos:
+        borda = max(grupos, key=cv2.contourArea)
+        if cv2.contourArea(borda) > 50:
+            pos_x, pos_y, lar_bx, alt_bx = cv2.boundingRect(borda)
+            
+            recorte = dif_img[pos_y:pos_y+alt_bx, pos_x:pos_x+lar_bx]
+            
+            if recorte.size > 0:
+                matriz = graycomatrix(recorte, [1], [0], 256, symmetric=True, normed=True)
+                con_int = graycoprops(matriz, 'contrast')[0, 0]
+                
+                if con_int > 100:
+                    doente = True
+                    cv2.rectangle(img_cor, (pos_x, pos_y), (pos_x+lar_bx, pos_y+alt_bx), (0, 255, 0), 2)
+
+    laudo = "SUSPEITA DE TUMOR" if doente else "SAUDÁVEL"
+    cor_res = 'red' if doente else 'green'
+    
+    plt.figure(figsize=(12, 4))
+    
+    plt.subplot(1, 3, 1)
+    plt.imshow(cv2.cvtColor(img_cor, cv2.COLOR_BGR2RGB))
+    plt.title(laudo, color=cor_res, fontweight='bold')
+    
+    plt.subplot(1, 3, 2)
+    plt.imshow(masc_seg, cmap='gray')
+    plt.title("Área Segura\n(Crânio Removido)")
+    
+    plt.subplot(1, 3, 3)
+    plt.imshow(dif_filt, cmap='magma')
+    plt.title(f"Assimetria Interna\nGLCM: {con_int:.0f}")
+    
+    plt.tight_layout()
+    plt.show()
+
+def mod_caos():
+    print("\n--- 4. ANÁLISE DE COMPLEXIDADE ---")
+    arquivo = pedir_arq()
+    if not arquivo: return
+
+    imagem = cv2.imread(arquivo, 0)
+    if imagem is None: print("Erro ao abrir imagem."); return
+
+    entropia = shannon_entropy(imagem)
+    matriz = graycomatrix(imagem, [1], [0], 256, symmetric=True, normed=True)
+    homogen = graycoprops(matriz, 'homogeneity')[0, 0]
+    energia = graycoprops(matriz, 'energy')[0, 0]
+
+    figura, eixos = plt.subplots(1, 4, figsize=(16, 5))
+    
+    eixos[0].imshow(imagem, cmap='gray')
+    eixos[0].set_title("Imagem")
+    eixos[0].axis('off')
+    
+    eixos[1].bar(['Entropia'], [entropia], color='salmon')
+    eixos[1].set_ylim(0, 8)
+    eixos[1].set_title("Caos (0-8)")
+    eixos[1].text(0, entropia+0.1, f"{entropia:.2f}", ha='center')
+    
+    eixos[2].bar(['Homogeneidade'], [homogen], color='skyblue')
+    eixos[2].set_ylim(0, 1)
+    eixos[2].set_title("Suavidade (0-1)")
+    eixos[2].text(0, homogen+0.02, f"{homogen:.2f}", ha='center')
+    
+    ener_vis = np.sqrt(energia)
+    eixos[3].bar(['Energia'], [ener_vis], color='gold')
+    eixos[3].set_ylim(0, 1)
+    eixos[3].set_title("Ordem/Padrão (0-1)")
+    eixos[3].text(0, ener_vis+0.02, f"{energia:.4f}", ha='center')
+
+    plt.tight_layout()
+    plt.show()
+
+def menu_prin():
+    while True:
+        print("\n===========================================")
+        print("   SISTEMA INTEGRADO DE VISÃO COMPUTACIONAL")
+        print("===========================================")
+        print("1. Inspecionar Tecido (Filtro Visual)")
+        print("2. Inspecionar Tecido (GLCM Avançado)")
+        print("3. Diagnóstico de Tumor (Skull Stripping)")
+        print("4. Analisar Complexidade (Entropia/Harmonia)")
+        print("0. Sair")
+        
+        opcao = input("\nEscolha uma opção: ")
+        
+        if opcao == '1': mod_base()
+        elif opcao == '2': mod_glcm()
+        elif opcao == '3': mod_tumor()
+        elif opcao == '4': mod_caos()
+        elif opcao == '0': 
+            print("Encerrando sistema..."); break
+        else:
+            print("Opção inválida!")
+
+if __name__ == "__main__":
+    menu_prin()
