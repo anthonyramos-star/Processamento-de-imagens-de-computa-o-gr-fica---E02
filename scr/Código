@@ -150,8 +150,8 @@ def analisar_tumor_assimetria(imagem_gray):
     mask_cranio = cv2.morphologyEx(mask_cranio, cv2.MORPH_OPEN, kernel_cranio)
 
     _, mask_tumor_bruta = cv2.threshold(suave, 100, 255, cv2.THRESH_BINARY)
-    mask_tumor = cv2.subtract(mask_tumor_bruta, mask_cranio) 
-    kernel_tumor = np.ones((5,5), np.uint8) 
+    mask_tumor = cv2.subtract(mask_tumor_bruta, mask_cranio)
+    kernel_tumor = np.ones((5,5), np.uint8)
     mask_tumor = cv2.morphologyEx(mask_tumor, cv2.MORPH_OPEN, kernel_tumor)
     mask_tumor = cv2.morphologyEx(mask_tumor, cv2.MORPH_CLOSE, kernel_tumor)
 
@@ -193,10 +193,10 @@ def analisar_tumor_assimetria(imagem_gray):
 
 
     mapa_final_rgb = cv2.cvtColor(mapa_final, cv2.COLOR_BGR2RGB)
-    
+
     plt.figure(figsize=(10, 8))
     plt.imshow(mapa_final_rgb)
-    plt.title(f"Status: {status_texto}\nVerde=Crânio | Vermelho=Tumor | Mapa=Cérebro", 
+    plt.title(f"Status: {status_texto}\nVerde=Crânio | Vermelho=Tumor | Mapa=Cérebro",
               color=cor_titulo, fontweight='bold', fontsize=12)
     plt.axis('off')
     plt.show()
@@ -228,7 +228,7 @@ def calcular_mapa_contraste_local(imagem_gray, N_LEVELS=8, WINDOW_SIZE=15, PASSO
 
     print("\n--- MAPA DE CONTRASTE LOCAL ")
     print(f"Config: Janela {WINDOW_SIZE}x{WINDOW_SIZE}, Níveis {N_LEVELS}, Passo {PASSO}")
-    
+
     start_time = time.time()
 
     try:
@@ -242,7 +242,7 @@ def calcular_mapa_contraste_local(imagem_gray, N_LEVELS=8, WINDOW_SIZE=15, PASSO
 
         h_out = (h - WINDOW_SIZE) // PASSO + 1
         w_out = (w - WINDOW_SIZE) // PASSO + 1
-        
+
         if h_out <= 0 or w_out <= 0:
             print(" erro: Janela maior que a imagem  ")
             return
@@ -257,10 +257,10 @@ def calcular_mapa_contraste_local(imagem_gray, N_LEVELS=8, WINDOW_SIZE=15, PASSO
             for j in range(0, w - WINDOW_SIZE + 1, PASSO):
 
                 window = image_quantized[i : i + WINDOW_SIZE, j : j + WINDOW_SIZE]
-                
+
                 glcm = graycomatrix(window, [1], [0], levels=N_LEVELS, symmetric=True, normed=True)
                 contrast = graycoprops(glcm, 'contrast')[0, 0]
-                
+
                 contrast_map_small[idx_i, idx_j] = contrast
                 idx_j += 1
             idx_i += 1
@@ -277,7 +277,7 @@ def calcular_mapa_contraste_local(imagem_gray, N_LEVELS=8, WINDOW_SIZE=15, PASSO
         axes[0].imshow(imagem_gray, cmap='gray')
         axes[0].set_title('Imagem Original')
         axes[0].axis('off')
-        
+
         im = axes[1].imshow(contrast_map_full, cmap='jet')
         axes[1].set_title(f' Contraste Local (Passo={PASSO})')
         axes[1].axis('off')
@@ -296,7 +296,28 @@ def exibir_mapa(mapa, titulo, cmap='gray'):
     plt.show()
 
 def converter_hsv(img_color):
-    return cv2.cvtColor(img_color, cv2.COLOR_BGR2HSV)
+    image = img_color
+
+    if image is None:
+        print("Error: The provided image is None.")
+        return None
+    elif len(image.shape) < 3:
+        print("Error: Provided image is grayscale, not suitable for HSV conversion.")
+        return None
+
+    plt.figure(figsize=(10,10))
+    plt.subplot(1,2,1)
+    plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+    plt.title("RGB View")
+
+    hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    plt.subplot(1,2,2)
+    plt.imshow(hsv_image)
+    plt.title("HSV View")
+    plt.tight_layout()
+    plt.show()
+
+    return hsv_image
 
 def equalizar_histograma(img_gray):
     eq = cv2.equalizeHist(img_gray)
@@ -332,7 +353,7 @@ def detectar_formas_geometricas(img_color):
     except FileNotFoundError:
         print(f" Erro: arquivo 'forms.json' não encontrado.")
         print(" crie ele  no mesmo diretório do script com o conteúdo:")
-        print('{"3":"Triangulo", "4":"Quadrilatero", "5":"pentagono"}')
+        print('{\"3\":\"Triangulo\", \"4\":\"Quadrilatero\", \"5\":\"pentagono\"}')
         return []
 
     gray = cv2.cvtColor(img_color, cv2.COLOR_BGR2GRAY)
@@ -410,7 +431,7 @@ def main():
         print(" 16. Gerar relatório em txt   ")
         print(" 0. Sair   ")
         print("---------------------------------------------- ------")
- 
+
         escolha = input("\nEscolha uma opção: ")
 
         if escolha == '1':
@@ -435,8 +456,8 @@ def main():
             exibir_mapa(resultados_principal['original_gray'], "Imagem em Escala de Cinza")
 
         elif escolha == '3':
-            hsv = converter_hsv(resultados_principal['original_color'])
-            exibir_mapa(cv2.cvtColor(hsv, cv2.COLOR_HSV2RGB), "Imagem em HSV")
+
+            converter_hsv(resultados_principal['original_color'])
 
         elif escolha == '4':
             equalizar_histograma(resultados_principal['original_gray'])
@@ -493,4 +514,4 @@ def main():
         time.sleep(1)
 
 if __name__ == "__main__":
-    main()
+    main()3
