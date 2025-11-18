@@ -12,8 +12,40 @@ from skimage.morphology import disk
 from skimage.util import img_as_ubyte
 
 
+def calcular_metricas_globais(gray_image):
+    """Calcula Entropia, Variância e Homogeneidade (Item 7)."""
+    entropy = shannon_entropy(gray_image)
+    variance = np.var(gray_image)
+
+    glcm = graycomatrix(gray_image, [1], [0], symmetric=True, normed=True)
+    homogeneity = graycoprops(glcm, 'homogeneity')[0, 0]
+    
+    return {
+        "Entropia": entropy,
+        "Variância": variance,
+        "Homogeneidade": homogeneity
+    }
+
+def classificar_complexidade(entropia):
+    """Define a classificação baseada na entropia (Item 8)."""
+    LIMIAR_ENTROPIA = 7.0
+    return "Alta Complexidade" if entropia > LIMIAR_ENTROPIA else "Baixa Complexidade"
+
+def gerar_mapa_convolucao(gray_image):
+    """Aplica filtro de bordas verticais (Item 9)."""
+    kernel_vertical = np.array([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]])
+    return cv2.filter2D(gray_image, -1, kernel_vertical)
+
+def gerar_mapa_textura(gray_image):
+    """Gera o mapa de entropia local (Item 10)."""
+    return rank.entropy(gray_image, disk(10))
+
 
 def processar_imagem(caminho_imagem):
+    """
+    Função Principal: Carrega a imagem e chama as sub-funções criadas acima.
+    Mantém a estrutura do dicionário de retorno para não quebrar o resto do código.
+    """
     try:
         image = cv2.imread(caminho_imagem)
         if image is None:
@@ -23,33 +55,25 @@ def processar_imagem(caminho_imagem):
         print(" Verifique se o caminho esta correto e o arquivo existe ")
         return None
 
+
     gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     nome_arquivo = os.path.basename(caminho_imagem)
 
-    entropy = shannon_entropy(gray_image)
-    variance = np.var(gray_image)
-    glcm = graycomatrix(gray_image, [1], [0], symmetric=True, normed=True)
-    homogeneity = graycoprops(glcm, 'homogeneity')[0, 0]
-    medidas = {
-        "Entropia": entropy,
-        "Variância": variance,
-        "Homogeneidade": homogeneity
-    }
+    medidas = calcular_metricas_globais(gray_image)
 
-    LIMIAR_ENTROPIA = 7.0
-    classificacao = "Alta Complexidade" if entropy > LIMIAR_ENTROPIA else "Baixa Complexidade"
 
-    kernel_vertical = np.array([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]])
-    mapa_convolucao = cv2.filter2D(gray_image, -1, kernel_vertical)
+    classificacao = classificar_complexidade(medidas["Entropia"])
 
-    mapa_textura = rank.entropy(gray_image, disk(10))
+    mapa_convolucao = gerar_mapa_convolucao(gray_image)
+
+    mapa_textura = gerar_mapa_textura(gray_image)
 
     return {
         "nome_arquivo": nome_arquivo,
         "medidas": medidas,
         "classificacao": classificacao,
         "original_gray": gray_image,
-        "original_color": image, 
+        "original_color": image,
         "mapa_conv": mapa_convolucao,
         "mapa_textura": mapa_textura
     }
@@ -237,7 +261,6 @@ def calcular_mapa_contraste_local(imagem_gray, N_LEVELS=16, WINDOW_SIZE=7):
         print(f"Erro durante o cálculo do mapa de contraste: {e}")
 
 
-
 def exibir_mapa(mapa, titulo, cmap='gray'):
     """Função helper para mostrar um único mapa."""
     plt.figure(figsize=(8, 6))
@@ -330,13 +353,14 @@ def gerar_relatorio(resultados, caminho_relatorio="relatorio.txt"):
         print(f"Erro ao gerar relatório: {e}")
 
 
+
 def main():
-    """Função principal que executa o loop do menu unificado."""
+    """Função principal com o menu unificado."""
 
     resultados_principal = None
 
     while True:
-        nome_arquivo = resultados_principal['nome do arquivo'] if resultados_principal else None
+        nome_arquivo = resultados_principal['nome_arquivo'] if resultados_principal else None
 
         print("\n-- SISTEMA INTEGRADO DE VISÃO COMPUTACIONAL --")
         if nome_arquivo:
@@ -345,57 +369,34 @@ def main():
             print("Nenhuma imagem carregada. Comece pela Opção 1.")
 
         print("-----------------------------------------------------")
-
-        print(" 1.Carregar/Processar Nova Imagem Principal ")
-
-        print(" 2.Ver Medidas Globais (Entropia, Variância, etc.) ")
-
-        print(" 3.Ver Classificação de Complexidade ")
-
-        print(" 4.Exibir Mapa de Padrões (Convolução) ")
-
-        print(" 5.Exibir Mapa de Textura Densa (Entropia Local) ")
-
-        print(" 6.Comparar com metricas globais de segunda imagem ")
-
-        print(" 7.Análise de Tecido ")
-
-        print(" 8.Análise de Tumor ")
-
-        print(" 9.Análise de Complexidade (Caos/Suavidade) ")
-
-        print(" 10.Mapa de contraste local ")
-
-        print(" 11.Converter para HSV ")
-
-        print(" 12.Equalizar Histograma ")
-
-        print(" 13.Binarizar imagem ")
-
-        print(" 14.Detectar bordas com canny ")
-
-        print(" 15.Detectar formas geométricas ")
-
-        print(" 16.Gerar relatório em txt")
-
-        print("0.Sair")
+        print(" 1. Carregar/Processar Nova Imagem Principal")
+        print(" 2. Converter para escala de cinza")
+        print(" 3. Converter para HSV")
+        print(" 4. Equalizar histograma")
+        print(" 5. Binarizar imagem")
+        print(" 6. Detectar bordas")
+        print(" 7. Calcular métricas Globais")
+        print(" 8. Análise de Complexidade")
+        print(" 9. Exibir Mapa de Padrões (Convolução)")
+        print(" 10. Exibir Mapa de Textura Densa (Entropia Local)")
+        print(" 11. Comparar com metricas globais de segunda imagem")
+        print(" 12. Análise de Tecido")
+        print(" 13. Análise de Tumor")
+        print(" 14. Análise de Complexidade (Caos/Suavidade)")
+        print(" 15. Mapa de contraste local")
+        print(" 16. Gerar relatório em txt")
+        print(" 0. Sair")
+        print("-----------------------------------------------------")
 
         escolha = input("\nEscolha uma opção: ")
 
         if escolha == '1':
             caminho_principal_input = input("Cole o CAMINHO da imagem principal: ").strip().strip("'\"")
-
             resultados_principal = processar_imagem(caminho_principal_input)
-
             if resultados_principal:
-                print("\n--- Análise da Imagem Principal Concluída ---")
-                print(f" > Classificação: {resultados_principal['classificacao']}")
-                print(f" > Medidas: Entropia={resultados_principal['medidas']['Entropia']:.2f}, "
-                      f"Variância={resultados_principal['medidas']['Variância']:.2f}, "
-                      f"Homogeneidade={resultados_principal['medidas']['Homogeneidade']:.2f}")
+                print("\n--- Imagem Carregada e Processada! ---")
             else:
                 resultados_principal = None
-
             continue
 
         elif escolha == '0':
@@ -408,26 +409,38 @@ def main():
             continue
 
         if escolha == '2':
-            print("\n--- [Item 2: Medidas Globais] ---")
+            exibir_mapa(resultados_principal['original_gray'], "Imagem em Escala de Cinza")
+
+        elif escolha == '3':
+            hsv = converter_hsv(resultados_principal['original_color'])
+            exibir_mapa(cv2.cvtColor(hsv, cv2.COLOR_HSV2RGB), "Imagem em HSV")
+
+        elif escolha == '4':
+            equalizar_histograma(resultados_principal['original_gray'])
+
+        elif escolha == '5':
+            binarizar_imagem(resultados_principal['original_gray'])
+
+        elif escolha == '6':
+            detectar_bordas(resultados_principal['original_gray'])
+
+        elif escolha == '7':
+            print("\n--- [Métricas Globais] ---")
             for chave, valor in resultados_principal['medidas'].items():
                 print(f" > {chave}: {valor:.4f}")
 
-        elif escolha == '3':
-            print("\n--- [Item 3: Classificação de Complexidade] ---")
+        elif escolha == '8':
+            print("\n--- [Classificação de Complexidade] ---")
             print(f" > {resultados_principal['classificacao']}")
 
-        elif escolha == '4':
-            exibir_mapa(resultados_principal['mapa_conv'],
-                        "Item 4: Mapa de Padrões (Convolução)",
-                        cmap='gray')
+        elif escolha == '9':
+            exibir_mapa(resultados_principal['mapa_conv'], "Mapa de Padrões (Convolução)", cmap='gray')
 
-        elif escolha == '5':
-            exibir_mapa(resultados_principal['mapa_textura'],
-                        "Item 5: Mapa de Textura Densa (Entropia Local)",
-                        cmap='plasma')
+        elif escolha == '10':
+            exibir_mapa(resultados_principal['mapa_textura'], "Mapa de Textura Densa (Entropia Local)", cmap='plasma')
 
-        elif escolha == '6':
-            print("\n--- [Item 6: Comparação] ---")
+        elif escolha == '11':
+            print("\n--- [Comparação] ---")
             caminho_secundaria_input = input("Cole o CAMINHO da SEGUNDA imagem: ").strip().strip("'\"")
             resultados_secundaria = processar_imagem(caminho_secundaria_input)
             if resultados_secundaria:
@@ -436,33 +449,17 @@ def main():
             else:
                 print("Falha ao processar a segunda imagem.")
 
-        elif escolha == '7':
+        elif escolha == '12':
             analisar_tecido_glcm(resultados_principal['original_gray'])
 
-        elif escolha == '8':
+        elif escolha == '13':
             analisar_tumor_assimetria(resultados_principal['original_gray'])
 
-        elif escolha == '9':
+        elif escolha == '14':
             analisar_complexidade_caos(resultados_principal['original_gray'])
 
-        elif escolha == '10':
-            calcular_mapa_contraste_local(resultados_principal['original_gray'])
-
-        elif escolha == '11':
-            hsv = converter_hsv(resultados_principal['original_color'])
-            exibir_mapa(cv2.cvtColor(hsv, cv2.COLOR_HSV2RGB), "Imagem em HSV")
-
-        elif escolha == '12':
-            equalizar_histograma(resultados_principal['original_gray'])
-
-        elif escolha == '13':
-            binarizar_imagem(resultados_principal['original_gray'])
-
-        elif escolha == '14':
-            detectar_bordas(resultados_principal['original_gray'])
-
         elif escolha == '15':
-            detectar_formas_geometricas(resultados_principal['original_color'])
+            calcular_mapa_contraste_local(resultados_principal['original_gray'])
 
         elif escolha == '16':
             gerar_relatorio(resultados_principal)
@@ -472,12 +469,5 @@ def main():
 
         time.sleep(1)
 
-
-
 if __name__ == "__main__":
     main()
-
-
-
-
-
