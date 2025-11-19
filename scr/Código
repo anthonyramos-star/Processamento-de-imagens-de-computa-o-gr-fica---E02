@@ -12,12 +12,16 @@ from skimage.morphology import disk
 from skimage.util import img_as_ubyte
 
 
+
+
 def calcular_metricas_globais(gray_image):
     entropy = shannon_entropy(gray_image)
     variance = np.var(gray_image)
 
+
     glcm = graycomatrix(gray_image, [1], [0], symmetric=True, normed=True)
     homogeneity = graycoprops(glcm, 'homogeneity')[0, 0]
+
 
     return {
         "Entropia": entropy,
@@ -25,16 +29,21 @@ def calcular_metricas_globais(gray_image):
         "Homogeneidade": homogeneity
     }
 
+
 def classificar_complexidade(entropia):
     LIMIAR_ENTROPIA = 6.0
     return "Alta Complexidade" if entropia > LIMIAR_ENTROPIA else "Baixa Complexidade"
+
 
 def gerar_mapa_convolucao(gray_image):
     kernel_vertical = np.array([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]])
     return cv2.filter2D(gray_image, -1, kernel_vertical)
 
+
 def gerar_mapa_textura(gray_image):
     return rank.entropy(gray_image, disk(10))
+
+
 
 
 def processar_imagem(caminho_imagem):
@@ -47,13 +56,16 @@ def processar_imagem(caminho_imagem):
         print(" Verifique se o caminho esta correto e o arquivo existe ")
         return None
 
+
     gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     nome_arquivo = os.path.basename(caminho_imagem)
+
 
     medidas = calcular_metricas_globais(gray_image)
     classificacao = classificar_complexidade(medidas["Entropia"])
     mapa_convolucao = gerar_mapa_convolucao(gray_image)
     mapa_textura = gerar_mapa_textura(gray_image)
+
 
     return {
         "nome_arquivo": nome_arquivo,
@@ -66,47 +78,61 @@ def processar_imagem(caminho_imagem):
     }
 
 
+
+
 def gerar_graficos_comparativos(lista_de_resultados):
     if not lista_de_resultados or len(lista_de_resultados) < 2:
         print(" erro: é necessários pelo menos 2 resultados para realizar a comparar.")
         return
+
 
     nomes = [r['nome_arquivo'] for r in lista_de_resultados]
     entropias = [r['medidas']['Entropia'] for r in lista_de_resultados]
     variancias = [r['medidas']['Variância'] for r in lista_de_resultados]
     homogeneidades = [r['medidas']['Homogeneidade'] for r in lista_de_resultados]
 
+
     fig, axes = plt.subplots(1, 3, figsize=(20, 6))
     fig.suptitle("Gráficos Comparativos (Medidas Globais)", fontsize=16)
+
 
     axes[0].bar(nomes, entropias, color='blue')
     axes[0].set_title("Entropia (Aleatoriedade)")
     axes[0].tick_params(axis='x', rotation=45)
 
+
     axes[1].bar(nomes, variancias, color='green')
     axes[1].set_title("Variância ")
     axes[1].tick_params(axis='x', rotation=45)
+
 
     axes[2].bar(nomes, homogeneidades, color='red')
     axes[2].set_title("Homogeneidade ")
     axes[2].tick_params(axis='x', rotation=45)
 
+
     plt.tight_layout(rect=[0, 0.03, 1, 0.95])
     plt.show()
 
 
-def analisar_tecido_glcm(imagem_gray):
+
+
+def Analisar_tecido(imagem_gray):
     print("\n--- Contexto: INSPEÇÃO DE TECIDO  ")
+
 
     imagem = cv2.resize(imagem_gray, (300, 300))
     img_cor = cv2.cvtColor(imagem, cv2.COLOR_GRAY2BGR)
+
 
     img_borra = cv2.medianBlur(imagem, 21)
     _, mascara = cv2.threshold(img_borra, 80, 255, cv2.THRESH_BINARY_INV)
     contor, _ = cv2.findContours(mascara, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
+
     recorte = imagem[0:50, 0:50]
     com_erro = False
+
 
     if contor:
         borda = max(contor, key=cv2.contourArea)
@@ -117,6 +143,7 @@ def analisar_tecido_glcm(imagem_gray):
             recorte = imagem[pos_y:min(pos_y+altu, 299), pos_x:min(pos_x+larg, 299)]
             cv2.rectangle(img_cor, (pos_x, pos_y), (pos_x+larg, pos_y+altu), (0, 0, 255), 2)
 
+
     if recorte.size > 0:
         matriz = graycomatrix(recorte, [1], [0], 256, symmetric=True, normed=True)
         energia = graycoprops(matriz, 'energy')[0, 0]
@@ -124,8 +151,10 @@ def analisar_tecido_glcm(imagem_gray):
     else:
         energia, contraste = 0, 0
 
+
     res_txt = "DANIFICADO" if com_erro else "INTEIRO"
     cor_txt = 'red' if com_erro else 'green'
+
 
     plt.figure(figsize=(10, 5))
     plt.subplot(1, 2, 1)
@@ -137,17 +166,23 @@ def analisar_tecido_glcm(imagem_gray):
     plt.tight_layout()
     plt.show()
 
-def analisar_tumor_assimetria(imagem_gray):
+
+def Analisar_tomorgragia(imagem_gray):
+
+
 
 
     print("\n--- Contexto: DIAGNÓSTICO DE TUMOR ")
 
+
     suave = cv2.GaussianBlur(imagem_gray, (5, 5), 0)
+
 
     _, mask_cranio = cv2.threshold(suave, 130, 255, cv2.THRESH_BINARY)
     kernel_cranio = np.ones((3,3), np.uint8)
     mask_cranio = cv2.morphologyEx(mask_cranio, cv2.MORPH_CLOSE, kernel_cranio)
     mask_cranio = cv2.morphologyEx(mask_cranio, cv2.MORPH_OPEN, kernel_cranio)
+
 
     _, mask_tumor_bruta = cv2.threshold(suave, 100, 255, cv2.THRESH_BINARY)
     mask_tumor = cv2.subtract(mask_tumor_bruta, mask_cranio)
@@ -155,44 +190,61 @@ def analisar_tumor_assimetria(imagem_gray):
     mask_tumor = cv2.morphologyEx(mask_tumor, cv2.MORPH_OPEN, kernel_tumor)
     mask_tumor = cv2.morphologyEx(mask_tumor, cv2.MORPH_CLOSE, kernel_tumor)
 
+
     _, mask_cerebro_base = cv2.threshold(suave, 30, 255, cv2.THRESH_BINARY)
     mask_cerebro = cv2.subtract(mask_cerebro_base, mask_cranio)
     mask_cerebro = cv2.subtract(mask_cerebro, mask_tumor)
+
 
     imagem_bgr_base = cv2.cvtColor(imagem_gray, cv2.COLOR_GRAY2BGR)
     mapa_final = np.zeros_like(imagem_bgr_base)
 
 
+
+
     heatmap = cv2.applyColorMap(imagem_gray, cv2.COLORMAP_JET)
+
+
 
 
     mapa_final[mask_cerebro == 255] = heatmap[mask_cerebro == 255]
 
+
     mapa_final[mask_tumor == 255] = [0, 0, 255]
 
+
     mapa_final[mask_cranio == 255] = [0, 255, 0]
+
 
     tumor_encontrado = False
     contornos, _ = cv2.findContours(mask_tumor, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
+
     contornos_validos = [cnt for cnt in contornos if cv2.contourArea(cnt) > 50]
+
 
     status_texto = " saudavel / normal "
     cor_titulo = 'green'
+
 
     if len(contornos_validos) > 0:
         tumor_encontrado = True
         status_texto = " possivel tumor detectado  "
         cor_titulo = 'red'
 
+
         cv2.drawContours(mapa_final, contornos_validos, -1, (0, 255, 255), 2)
+
 
         maior_tumor = max(contornos_validos, key=cv2.contourArea)
         x, y, w, h = cv2.boundingRect(maior_tumor)
         cv2.rectangle(mapa_final, (x, y), (x + w, y + h), (0, 255, 255), 2)
 
 
+
+
     mapa_final_rgb = cv2.cvtColor(mapa_final, cv2.COLOR_BGR2RGB)
+
 
     plt.figure(figsize=(10, 8))
     plt.imshow(mapa_final_rgb)
@@ -202,12 +254,16 @@ def analisar_tumor_assimetria(imagem_gray):
     plt.show()
 
 
-def analisar_complexidade_caos(imagem_gray):
-    print("\n---- ANÁLISE DE COMPLEXIDADE (entropia x homogenidade) ")
+
+
+def EntropiaxHomogenidade(imagem_gray):
+    print("\n---- ANÁLISE DE COMPLEXIDADE (EntropiaxHomogenidade) ")
+
 
     entropia = shannon_entropy(imagem_gray)
     matriz = graycomatrix(imagem_gray, [1], [0], 256, symmetric=True, normed=True)
     homogen = graycoprops(matriz, 'homogeneity')[0, 0]
+
 
     figura, eixos = plt.subplots(1, 3, figsize=(12, 5))
     eixos[0].imshow(imagem_gray, cmap='gray')
@@ -224,59 +280,78 @@ def analisar_complexidade_caos(imagem_gray):
     plt.tight_layout()
     plt.show()
 
+
 def calcular_mapa_contraste_local(imagem_gray, N_LEVELS=8, WINDOW_SIZE=15, PASSO=5):
+
 
     print("\n--- MAPA DE CONTRASTE LOCAL ")
     print(f"Config: Janela {WINDOW_SIZE}x{WINDOW_SIZE}, Níveis {N_LEVELS}, Passo {PASSO}")
 
+
     start_time = time.time()
+
 
     try:
         image_ubyte = img_as_ubyte(imagem_gray)
         bins = np.linspace(0, 255, N_LEVELS+1)
         image_quantized = np.digitize(image_ubyte, bins) - 1
 
+
         image_quantized = np.clip(image_quantized, 0, N_LEVELS-1).astype(int)
+
 
         h, w = image_quantized.shape
 
+
         h_out = (h - WINDOW_SIZE) // PASSO + 1
         w_out = (w - WINDOW_SIZE) // PASSO + 1
+
 
         if h_out <= 0 or w_out <= 0:
             print(" erro: Janela maior que a imagem  ")
             return
 
+
         contrast_map_small = np.zeros((h_out, w_out), dtype=np.float32)
 
+
         print(f" Processando de grade reduzida:  {w_out}x{h_out} pixels ")
+
 
         idx_i = 0
         for i in range(0, h - WINDOW_SIZE + 1, PASSO):
             idx_j = 0
             for j in range(0, w - WINDOW_SIZE + 1, PASSO):
 
+
                 window = image_quantized[i : i + WINDOW_SIZE, j : j + WINDOW_SIZE]
+
 
                 glcm = graycomatrix(window, [1], [0], levels=N_LEVELS, symmetric=True, normed=True)
                 contrast = graycoprops(glcm, 'contrast')[0, 0]
+
 
                 contrast_map_small[idx_i, idx_j] = contrast
                 idx_j += 1
             idx_i += 1
 
+
         contrast_map_full = cv2.resize(contrast_map_small, (w, h), interpolation=cv2.INTER_LINEAR)
+
 
         if contrast_map_full.max() > 0:
             contrast_map_full = contrast_map_full / contrast_map_full.max()
 
+
         end_time = time.time()
         print(f" Cálculo concluído em {end_time - start_time:.2f} segundos.")
+
 
         fig, axes = plt.subplots(1, 2, figsize=(12, 6))
         axes[0].imshow(imagem_gray, cmap='gray')
         axes[0].set_title('Imagem Original')
         axes[0].axis('off')
+
 
         im = axes[1].imshow(contrast_map_full, cmap='jet')
         axes[1].set_title(f' Contraste Local (Passo={PASSO})')
@@ -285,8 +360,10 @@ def calcular_mapa_contraste_local(imagem_gray, N_LEVELS=8, WINDOW_SIZE=15, PASSO
         plt.tight_layout()
         plt.show()
 
+
     except Exception as e:
         print(f" Erro durante o calculo do mapa de contraste : {e}")
+
 
 def exibir_mapa(mapa, titulo, cmap='gray'):
     plt.figure(figsize=(8, 6))
@@ -295,8 +372,10 @@ def exibir_mapa(mapa, titulo, cmap='gray'):
     plt.axis('off')
     plt.show()
 
+
 def converter_hsv(img_color):
     image = img_color
+
 
     if image is None:
         print("Error: The provided image is None.")
@@ -305,10 +384,12 @@ def converter_hsv(img_color):
         print("Error: Provided image is grayscale, not suitable for HSV conversion.")
         return None
 
+
     plt.figure(figsize=(10,10))
     plt.subplot(1,2,1)
     plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
     plt.title("RGB View")
+
 
     hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
     plt.subplot(1,2,2)
@@ -317,11 +398,14 @@ def converter_hsv(img_color):
     plt.tight_layout()
     plt.show()
 
+
     return hsv_image
+
 
 def equalizar_histograma(img_gray):
     eq = cv2.equalizeHist(img_gray)
     hist_eq = cv2.calcHist([eq], [0], None, [256], [0,256])
+
 
     plt.figure(figsize=(10, 5))
     plt.subplot(1, 2, 1)
@@ -329,21 +413,25 @@ def equalizar_histograma(img_gray):
     plt.title(" Imagem Equalizada")
     plt.axis('off')
 
+
     plt.subplot(1, 2, 2)
     plt.plot(hist_eq, color='gray')
     plt.title(" Histograma Equalizado")
     plt.show()
     return eq
 
+
 def binarizar_imagem(img_gray, limiar=127):
     _, bw = cv2.threshold(img_gray, limiar, 255, cv2.THRESH_BINARY)
     exibir_mapa(bw, f"Imagem Binarizada (Limiar={limiar})")
     return bw
 
+
 def detectar_bordas(img_gray):
     bordas = cv2.Canny(img_gray, 100, 200)
     exibir_mapa(bordas, "Bordas (Canny)")
     return bordas
+
 
 def detectar_formas_geometricas(img_color):
     json_path = "forms.json"
@@ -356,12 +444,15 @@ def detectar_formas_geometricas(img_color):
         print('{\"3\":\"Triangulo\", \"4\":\"Quadrilatero\", \"5\":\"pentagono\"}')
         return []
 
+
     gray = cv2.cvtColor(img_color, cv2.COLOR_BGR2GRAY)
     bordas = cv2.Canny(gray, 80, 200)
     contornos, _ = cv2.findContours(bordas, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
+
     img_saida = img_color.copy()
     formas_encontradas = []
+
 
     for c in contornos:
         if cv2.contourArea(c) < 200: continue
@@ -370,18 +461,22 @@ def detectar_formas_geometricas(img_color):
         lados = len(aprox)
         nome = formas_dict.get(str(lados), f"{lados} lados")
 
+
         M = cv2.moments(c)
         if M["m00"] != 0:
             cx = int(M["m10"] / M["m00"])
             cy = int(M["m01"] / M["m00"])
             cv2.putText(img_saida, nome, (cx - 40, cy), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
 
+
         cv2.drawContours(img_saida, [aprox], -1, (0, 255, 0), 2)
         formas_encontradas.append({"forma": nome, "lados": lados})
+
 
     exibir_mapa(cv2.cvtColor(img_saida, cv2.COLOR_BGR2RGB), "Formas Detectadas")
     print(f"Formas detectadas: {formas_encontradas}")
     return formas_encontradas
+
 
 def gerar_relatorio(resultados, caminho_relatorio="relatorio.txt"):
     try:
@@ -399,18 +494,25 @@ def gerar_relatorio(resultados, caminho_relatorio="relatorio.txt"):
 
 
 
+
+
+
 def main():
+
 
     resultados_principal = None
 
+
     while True:
         nome_arquivo = resultados_principal['nome_arquivo'] if resultados_principal else None
+
 
         print("\n SISTEMA INTEGRADO DE VISÃO COMPUTACIONAL  ")
         if nome_arquivo:
             print(f"Imagem Carregada: {nome_arquivo} ")
         else:
             print("Nenhuma imagem carregada. Comece pela Opção 1. ")
+
 
         print("-------------------- --------------------------------- ")
         print(" 1. Carregar/Processar Nova Imagem Principal ")
@@ -426,13 +528,15 @@ def main():
         print(" 11. Comparar com metricas globais de segunda imagem ")
         print(" 12. Análise de Tecido  ")
         print(" 13. Análise de Tumor  ")
-        print(" 14. Análise de Complexidade entropia x homogenidade ")
+        print(" 14. Análise de Complexidade EntropiaxHomogenidade ")
         print(" 15. Mapa de contraste local  ")
         print(" 16. Gerar relatório em txt   ")
         print(" 0. Sair   ")
         print("---------------------------------------------- ------")
 
+
         escolha = input("\nEscolha uma opção: ")
+
 
         if escolha == '1':
             caminho_principal_input = input("Cole o caminho da imagem principal:  ").strip().strip("'\"")
@@ -443,45 +547,58 @@ def main():
                 resultados_principal = None
             continue
 
+
         elif escolha == '0':
             print("Saindo...")
             break
+
 
         if not resultados_principal:
             print("\nErro: Nenhuma imagem carregada, Use a Opção 1 primeiro.")
             time.sleep(1)
             continue
 
+
         if escolha == '2':
             exibir_mapa(resultados_principal['original_gray'], "Imagem em Escala de Cinza")
 
+
         elif escolha == '3':
 
+
             converter_hsv(resultados_principal['original_color'])
+
 
         elif escolha == '4':
             equalizar_histograma(resultados_principal['original_gray'])
 
+
         elif escolha == '5':
             binarizar_imagem(resultados_principal['original_gray'])
 
+
         elif escolha == '6':
             detectar_bordas(resultados_principal['original_gray'])
+
 
         elif escolha == '7':
             print("\n--- [Métricas Globais] ---")
             for chave, valor in resultados_principal['medidas'].items():
                 print(f" > {chave}: {valor:.4f}")
 
+
         elif escolha == '8':
             print("\n--- [Classificação de Complexidade] ---")
             print(f" > {resultados_principal['classificacao']}")
 
+
         elif escolha == '9':
             exibir_mapa(resultados_principal['mapa_conv'], "Mapa de Padrões com convolução )", cmap='gray')
 
+
         elif escolha == '10':
             exibir_mapa(resultados_principal['mapa_textura'], "Mapa de Textura Densa (Entropia Local)", cmap='plasma')
+
 
         elif escolha == '11':
             print("\n--- [Comparação] ---")
@@ -493,25 +610,34 @@ def main():
             else:
                 print("Falha ao processar a segunda imagem.")
 
+
         elif escolha == '12':
-            analisar_tecido_glcm(resultados_principal['original_gray'])
+            Analisar_tecido(resultados_principal['original_gray'])
+
 
         elif escolha == '13':
-            analisar_tumor_assimetria(resultados_principal['original_gray'])
+            Analisar_tomorgragia(resultados_principal['original_gray'])
+
 
         elif escolha == '14':
-            analisar_complexidade_caos(resultados_principal['original_gray'])
+            EntropiaxHomogenidade(resultados_principal['original_gray'])
+
 
         elif escolha == '15':
             calcular_mapa_contraste_local(resultados_principal['original_gray'])
 
+
         elif escolha == '16':
             gerar_relatorio(resultados_principal)
+
 
         else:
             print("Opção inválida. Tente novamente.")
 
+
         time.sleep(1)
 
+
 if __name__ == "__main__":
-    main()3
+    main()
+
